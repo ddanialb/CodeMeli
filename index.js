@@ -2,6 +2,8 @@ import dotenv from "dotenv";
 import TelegramBot from "node-telegram-bot-api";
 import { JSDOM } from "jsdom"; // ⚠️ در Node.js باید از jsdom استفاده کنی
 
+import express from "express";
+
 dotenv.config();
 
 const TOKEN = process.env.TOKEN;
@@ -150,4 +152,15 @@ bot.onText(/\/start/, () => {
 bot.onText(/\/concurrent (\d+)/, (msg, match) => {
   const newConcurrent = parseInt(match[1]);
   bot.sendMessage(CHAT_ID, `⚡ همزمانی تنظیم شد: ${newConcurrent}`);
+});
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+  res.send("Bot is running");
+});
+
+app.listen(PORT, () => {
+  console.log(`Express server running on port ${PORT}`);
 });
