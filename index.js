@@ -108,4 +108,7 @@ async function bruteForceAll(start = 0, end = 100) {
 // ===============================
 // ▶️ اجرای واقعی
 // ===============================
-bruteForceAll(0, 500); // میتونی start و end رو تغییر بدی
+const START = "0010000000";
+const END = "0259999999";
+
+bruteForceAll(Number(START), Number(END));
