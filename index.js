@@ -30,15 +30,40 @@ async function checkUserExists(nationalNo) {
   const url = "https://haftometir.modabberonline.com/ForgetPassword.aspx";
 
   try {
-    const pageRes = await fetch(url);
+    // مرحله اول: GET مثل مرورگر
+    const pageRes = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "fa-IR,fa;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+      },
+    });
+
     const pageHtml = await pageRes.text();
 
+    // برداشت کوکی‌ها برای POST بعدی
+    const setCookie = pageRes.headers.get("set-cookie");
+    const cookieHeader = setCookie
+      ? setCookie
+          .split(",")
+          .map((c) => c.split(";")[0].trim())
+          .join("; ")
+      : undefined;
+
+    // پارس HTML شبیه DOMParser
     const dom = new JSDOM(pageHtml);
     const doc = dom.window.document;
 
     const formData = new URLSearchParams();
     doc.querySelectorAll('input[type="hidden"]').forEach((input) => {
-      formData.append(input.name, input.value || "");
+      if (input.name) {
+        formData.append(input.name, input.value || "");
+      }
     });
 
     formData.append("Radio1", "rbPersonal");
@@ -46,12 +71,26 @@ async function checkUserExists(nationalNo) {
     formData.append("ddlYears", "51");
     formData.append("btnGetMobileNumber", "ارسال");
 
+    // مرحله دوم: POST با هدرهای شبیه مرورگر + کوکی
+    const headers = {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+      "Accept-Language": "fa-IR,fa;q=0.9,en-US;q=0.8,en;q=0.7",
+      Origin: "https://haftometir.modabberonline.com",
+      Referer: "https://haftometir.modabberonline.com/ForgetPassword.aspx",
+      Connection: "keep-alive",
+    };
+
+    if (cookieHeader) {
+      headers["Cookie"] = cookieHeader;
+    }
+
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Connection: "keep-alive",
-      },
+      headers,
       body: formData,
     });
 
