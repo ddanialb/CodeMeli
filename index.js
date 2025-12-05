@@ -7,11 +7,21 @@ dotenv.config();
 
 const TOKEN = process.env.TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
-const START = Number(process.env.START);
-const END = Number(process.env.END);
+const START = Number(process.env.START ?? 0);
+const END = Number(process.env.END ?? 1000);
 const CONCURRENT = Number(process.env.CONCURRENT) || 10;
 
 const bot = new TelegramBot(TOKEN, { polling: true });
+
+console.log("Bot script started");
+console.log(`Range: ${START} → ${END} | Concurrent: ${CONCURRENT}`);
+if (!TOKEN || !CHAT_ID) {
+  console.error("⚠️ TOKEN یا CHAT_ID در .env تنظیم نشده است");
+}
+
+bot.on("polling_error", (err) => {
+  console.error("Polling error:", err?.message || err);
+});
 
 // ===============================
 // تابع چک کردن کاربر
@@ -110,10 +120,8 @@ async function bruteForceAll(start, end, concurrent = 10) {
       count++;
     }
 
-    // ------------------------------------
     // 🔵 هر 50 تا → فقط لاگ کنسول
-    // ------------------------------------
-    if (count % 50 < concurrent) {
+    if (count > 0 && count % 50 === 0) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       const speed = (count / elapsed).toFixed(1);
 
@@ -124,10 +132,8 @@ async function bruteForceAll(start, end, concurrent = 10) {
       );
     }
 
-    // ------------------------------------
     // 🟡 هر 1000 تا → پیام تلگرام
-    // ------------------------------------
-    if (count % 1000 < concurrent) {
+    if (count > 0 && count % 1000 === 0) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       const speed = (count / elapsed).toFixed(1);
 
@@ -187,4 +193,8 @@ app.get("/", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Express server running on port ${PORT}`);
+});
+
+bruteForceAll(START, END, CONCURRENT).catch((err) => {
+  console.error("bruteForceAll error:", err?.message || err);
 });
