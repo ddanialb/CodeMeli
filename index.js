@@ -10,13 +10,18 @@ const CONCURRENT_REQUESTS = parseInt(process.env.CONCURRENT_REQUESTS) || 20;
 const DELAY_BETWEEN_BATCHES =
   parseInt(process.env.DELAY_BETWEEN_BATCHES) || 100;
 
+if (!BOT_TOKEN) {
+  console.error("ERROR: BOT_TOKEN is not set!");
+  console.error("Please set BOT_TOKEN in Render Environment Variables");
+  process.exit(1);
+}
+
 const app = express();
 
 app.get("/", (req, res) => {
   res.json({
     status: "Bot is running",
     uptime: process.uptime(),
-    memory: process.memoryUsage(),
   });
 });
 
@@ -32,6 +37,7 @@ const userStates = {};
 const activeTests = {};
 
 console.log("Telegram bot started!");
+console.log("Token:", BOT_TOKEN.substring(0, 10) + "...");
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
